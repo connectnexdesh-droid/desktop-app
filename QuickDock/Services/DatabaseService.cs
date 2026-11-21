@@ -60,6 +60,11 @@ public sealed class DatabaseService
                 Key TEXT PRIMARY KEY,
                 Value TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS ActionState (
+                Key TEXT PRIMARY KEY,
+                Value TEXT NOT NULL
+            );
             """;
         command.ExecuteNonQuery();
     }
@@ -179,6 +184,33 @@ public sealed class DatabaseService
         }
 
         transaction.Commit();
+    }
+
+
+    public int LoadActionState(string key, int defaultValue = 0)
+    {
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT Value FROM ActionState WHERE Key = $key;";
+        command.Parameters.AddWithValue("$key", key);
+
+        var value = command.ExecuteScalar()?.ToString();
+        return int.TryParse(value, out var parsed) ? parsed : defaultValue;
+    }
+
+    public void SaveActionState(string key, int value)
+    {
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO ActionState (Key, Value)
+            VALUES ($key, $value)
+            ON CONFLICT(Key) DO UPDATE SET Value = excluded.Value;
+            """;
+        command.Parameters.AddWithValue("$key", key);
+        command.Parameters.AddWithValue("$value", value.ToString(
+            System.Globalization.CultureInfo.InvariantCulture));
+        command.ExecuteNonQuery();
     }
 
     public AppSettings LoadSettings()
