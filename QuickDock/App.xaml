@@ -210,7 +210,6 @@
             <Setter Property="CanUserAddRows" Value="False"/>
             <Setter Property="CanUserDeleteRows" Value="False"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-            <Setter Property="SelectAllButtonStyle" Value="{StaticResource GridSelectAllButtonStyle}"/>
         </Style>
 
         <Style TargetType="{x:Type DataGridColumnHeader}">
