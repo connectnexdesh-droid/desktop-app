@@ -7,6 +7,13 @@ namespace QuickDock;
 public partial class FloatingWindow : Window
 {
     private readonly MainWindow _owner;
+    private bool _pointerPressed;
+    private bool _dragging;
+    private Point _dragStart;
+    private double _dragWindowLeft;
+    private double _dragWindowTop;
+    private double _bubbleLeft;
+    private double _bubbleTop;
 
     public FloatingWindow(MainWindow owner)
     {
@@ -42,40 +49,97 @@ public partial class FloatingWindow : Window
         var workArea = SystemParameters.WorkArea;
         Left = workArea.Right - Width - 22;
         Top = workArea.Bottom - Height - 70;
+        _bubbleLeft = Left;
+        _bubbleTop = Top;
     }
 
     private void ExpandPanel()
     {
+        if (PanelRoot.Visibility == Visibility.Visible)
+            return;
+
+        _bubbleLeft = Left;
+        _bubbleTop = Top;
+
+        Width = 350;
+        Height = 470;
+
         var workArea = SystemParameters.WorkArea;
+        var maxLeft = Math.Max(workArea.Left + 8, workArea.Right - Width - 8);
+        var maxTop = Math.Max(workArea.Top + 8, workArea.Bottom - Height - 8);
+
+        Left = Math.Clamp(_bubbleLeft, workArea.Left + 8, maxLeft);
+        Top = Math.Clamp(_bubbleTop, workArea.Top + 8, maxTop);
+
         BubbleRoot.Visibility = Visibility.Collapsed;
         PanelRoot.Visibility = Visibility.Visible;
-        Width = 326;
-        Height = 438;
-        Left = Math.Min(Left, workArea.Right - Width - 10);
-        Top = Math.Min(Top, workArea.Bottom - Height - 10);
-        Left = Math.Max(workArea.Left + 10, Left);
-        Top = Math.Max(workArea.Top + 10, Top);
     }
 
     private void CollapsePanel()
     {
         PanelRoot.Visibility = Visibility.Collapsed;
+        Width = 68;
+        Height = 68;
+        Left = _bubbleLeft;
+        Top = _bubbleTop;
         BubbleRoot.Visibility = Visibility.Visible;
-        Width = 62;
-        Height = 62;
     }
 
     private void Bubble_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        var start = PointToScreen(e.GetPosition(this));
-        try { DragMove(); }
-        catch (InvalidOperationException) { }
+        if (e.ChangedButton != MouseButton.Left)
+            return;
 
-        var end = PointToScreen(Mouse.GetPosition(this));
-        var moved = Math.Abs(end.X - start.X) > SystemParameters.MinimumHorizontalDragDistance ||
-                    Math.Abs(end.Y - start.Y) > SystemParameters.MinimumVerticalDragDistance;
+        _pointerPressed = true;
+        _dragging = false;
+        _dragStart = e.GetPosition(null);
+        _dragWindowLeft = Left;
+        _dragWindowTop = Top;
 
-        if (!moved)
+        BubbleRoot.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void Bubble_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_pointerPressed || e.LeftButton != MouseButtonState.Pressed)
+            return;
+
+        var current = e.GetPosition(null);
+        var deltaX = current.X - _dragStart.X;
+        var deltaY = current.Y - _dragStart.Y;
+
+        if (!_dragging &&
+            (Math.Abs(deltaX) >= SystemParameters.MinimumHorizontalDragDistance ||
+             Math.Abs(deltaY) >= SystemParameters.MinimumVerticalDragDistance))
+        {
+            _dragging = true;
+        }
+
+        if (!_dragging)
+            return;
+
+        var workArea = SystemParameters.WorkArea;
+        var maxLeft = Math.Max(workArea.Left, workArea.Right - Width);
+        var maxTop = Math.Max(workArea.Top, workArea.Bottom - Height);
+
+        Left = Math.Clamp(_dragWindowLeft + deltaX, workArea.Left, maxLeft);
+        Top = Math.Clamp(_dragWindowTop + deltaY, workArea.Top, maxTop);
+
+        _bubbleLeft = Left;
+        _bubbleTop = Top;
+    }
+
+    private void Bubble_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_pointerPressed)
+            return;
+
+        _pointerPressed = false;
+        if (BubbleRoot.IsMouseCaptured)
+            BubbleRoot.ReleaseMouseCapture();
+
+        if (!_dragging)
             ExpandPanel();
 
         e.Handled = true;
