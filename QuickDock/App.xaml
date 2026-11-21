@@ -100,11 +100,26 @@
                                               HorizontalAlignment="Left"/>
                             <ToggleButton x:Name="DropDownToggle" Grid.Column="1"
                                           Focusable="False" ClickMode="Press"
+                                          Background="#20334D"
                                           IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
-                                <Border Background="#20334D" CornerRadius="0,6,6,0">
-                                    <TextBlock Text="▾" Foreground="#EAF1FC" FontSize="16"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                                        <Border x:Name="ArrowChrome" Background="{TemplateBinding Background}"
+                                                CornerRadius="0,6,6,0">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="ArrowChrome" Property="Background" Value="#36547A"/>
+                                            </Trigger>
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter TargetName="ArrowChrome" Property="Background" Value="#1D3D65"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                                <TextBlock Text="▾" Foreground="#EAF1FC" FontSize="16"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </ToggleButton>
                             <Popup x:Name="PART_Popup" Placement="Bottom"
                                    IsOpen="{TemplateBinding IsDropDownOpen}"
@@ -112,8 +127,7 @@
                                    PopupAnimation="Fade">
                                 <Border Background="#111C2E" BorderBrush="#526B8C"
                                         BorderThickness="1" CornerRadius="7"
-                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
-                                        MaxHeight="280">
+                                        MinWidth="150" MaxHeight="280">
                                     <ScrollViewer SnapsToDevicePixels="True"
                                                   VerticalScrollBarVisibility="Auto">
                                         <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
