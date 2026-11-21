@@ -3,6 +3,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
+using System.Text;
+using Microsoft.Win32;
 using QuickDock.Models;
 using QuickDock.Services;
 
@@ -11,7 +13,9 @@ namespace QuickDock;
 public partial class MainWindow : Window
 {
     private readonly DatabaseService _database = new();
-    private readonly Dictionary<string, (int Index, DateTime LastClickUtc)> _copyStates = new();
+    private readonly Dictionary<string, int> _lastCopiedTextRows = new();
+    private readonly Dictionary<string, CancellationTokenSource> _pendingTextClicks = new();
+    private readonly Dictionary<char, int> _lastColumnRows = new();
     private readonly Stack<UndoSnapshot> _undoStack = new();
     private FloatingWindow? _floatingWindow;
     private string _currentSheet = "TXT1";
@@ -36,9 +40,94 @@ public partial class MainWindow : Window
 
         LoadTextSheet(_currentSheet);
         LoadMainSheet();
+        LoadProgressState();
+        UpdateTextCopyButtonLabels();
+        RefreshColumnProgress();
 
         _ready = true;
         ApplyFloatingSettings();
+    }
+
+
+    private void Txt1_Main_Click(object sender, RoutedEventArgs e) => CopyNextText("TXT1");
+    private void Txt2_Main_Click(object sender, RoutedEventArgs e) => CopyNextText("TXT2");
+    private void Txt3_Main_Click(object sender, RoutedEventArgs e) => CopyNextText("TXT3");
+    private void Txt4_Main_Click(object sender, RoutedEventArgs e) => CopyNextText("TXT4");
+
+    private void MainA_Click(object sender, RoutedEventArgs e) => PasteClipboardIntoColumn('A');
+    private void MainB_Click(object sender, RoutedEventArgs e) => PasteClipboardIntoColumn('B');
+    private void MainC_Click(object sender, RoutedEventArgs e) => PasteClipboardIntoColumn('C');
+    private void MainD_Click(object sender, RoutedEventArgs e) => PasteClipboardIntoColumn('D');
+    private void MainE_Click(object sender, RoutedEventArgs e) => PasteClipboardIntoColumn('E');
+
+    private void LoadProgressState()
+    {
+        foreach (var sheet in new[] { "TXT1", "TXT2", "TXT3", "TXT4" })
+        {
+            var rowNumber = _database.LoadActionState($"Text:{sheet}");
+            if (rowNumber > 0)
+                _lastCopiedTextRows[sheet] = rowNumber;
+        }
+    }
+
+    private void UpdateTextCopyButtonLabels()
+    {
+        SetTextCopyButton(Txt1CopyButton, "TXT 1", "TXT1");
+        SetTextCopyButton(Txt2CopyButton, "TXT 2", "TXT2");
+        SetTextCopyButton(Txt3CopyButton, "TXT 3", "TXT3");
+        SetTextCopyButton(Txt4CopyButton, "TXT 4", "TXT4");
+
+        if (_floatingWindow is null)
+            return;
+
+        foreach (var sheet in new[] { "TXT1", "TXT2", "TXT3", "TXT4" })
+        {
+            var rowNumber = _lastCopiedTextRows.TryGetValue(sheet, out var row) ? row : 0;
+            _floatingWindow.UpdateTextProgress(sheet, rowNumber);
+        }
+    }
+
+    private static void SetTextCopyButton(Button button, string title, string sheetName)
+    {
+        button.Content = title + Environment.NewLine;
+    }
+
+    private void RefreshColumnProgress()
+    {
+        foreach (var column in "ABCDE")
+        {
+            var lastRow = MainRows
+                .Where(row => !string.IsNullOrWhiteSpace(GetColumnValue(row, column)))
+                .Select(row => row.RowNumber)
+                .DefaultIfEmpty(0)
+                .Max();
+
+            _lastColumnRows[column] = lastRow;
+            _database.SaveActionState($"Column:{column}", lastRow);
+        }
+
+        UpdateColumnActionButtonLabels();
+    }
+
+    private void UpdateColumnActionButtonLabels()
+    {
+        MainAButton.Content = FormatColumnButton('A');
+        MainBButton.Content = FormatColumnButton('B');
+        MainCButton.Content = FormatColumnButton('C');
+        MainDButton.Content = FormatColumnButton('D');
+        MainEButton.Content = FormatColumnButton('E');
+
+        _floatingWindow?.UpdateColumnProgress('A', _lastColumnRows.TryGetValue('A', out var a) ? a : 0);
+        _floatingWindow?.UpdateColumnProgress('B', _lastColumnRows.TryGetValue('B', out var b) ? b : 0);
+        _floatingWindow?.UpdateColumnProgress('C', _lastColumnRows.TryGetValue('C', out var c) ? c : 0);
+        _floatingWindow?.UpdateColumnProgress('D', _lastColumnRows.TryGetValue('D', out var d) ? d : 0);
+        _floatingWindow?.UpdateColumnProgress('E', _lastColumnRows.TryGetValue('E', out var e) ? e : 0);
+    }
+
+    private string FormatColumnButton(char column)
+    {
+        var row = _lastColumnRows.TryGetValue(column, out var value) ? value : 0;
+        return row > 0 ? $"{column}{Environment.NewLine}{column}{row}" : $"{column}{Environment.NewLine}—";
     }
 
     private void LoadTextSheet(string sheetName)
@@ -436,45 +525,122 @@ public partial class MainWindow : Window
         _database.SaveMainRows(MainRows);
     }
 
-    public void CopyNextText(string sheetName)
+    public async void CopyNextText(string sheetName)
+    {
+        if (_pendingTextClicks.TryGetValue(sheetName, out var pending))
+        {
+            _pendingTextClicks.Remove(sheetName);
+            pending.Cancel();
+            pending.Dispose();
+            CopyPreviousTextNow(sheetName);
+            return;
+        }
+
+        var cancellation = new CancellationTokenSource();
+        _pendingTextClicks[sheetName] = cancellation;
+
+        try
+        {
+            var doubleClickDelay = Math.Clamp(SystemParameters.DoubleClickTime, 250, 650);
+            await Task.Delay(doubleClickDelay, cancellation.Token);
+
+            if (_pendingTextClicks.TryGetValue(sheetName, out var active) &&
+                ReferenceEquals(active, cancellation))
+            {
+                _pendingTextClicks.Remove(sheetName);
+                cancellation.Dispose();
+                CopyNextTextNow(sheetName);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The second click arrived within the Windows double-click interval.
+        }
+    }
+
+    private List<(int RowNumber, string Text)> LoadCopyableText(string sheetName)
+    {
+        if (sheetName == _currentSheet)
+        {
+            TextGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+            TextGrid.CommitEdit(DataGridEditingUnit.Row, true);
+            SaveCurrentTextRows();
+        }
+
+        return _database.LoadTextRows(sheetName)
+            .Where(row => !string.IsNullOrWhiteSpace(row.Text))
+            .Select(row => (row.RowNumber, row.Text))
+            .ToList();
+    }
+
+    private int GetLastCopiedIndex(string sheetName, List<(int RowNumber, string Text)> values)
+    {
+        var lastRow = _lastCopiedTextRows.TryGetValue(sheetName, out var storedRow)
+            ? storedRow
+            : _database.LoadActionState($"Text:{sheetName}");
+
+        if (lastRow <= 0)
+            return -1;
+
+        var index = values.FindIndex(value => value.RowNumber == lastRow);
+        if (index >= 0)
+            return index;
+
+        return values.FindLastIndex(value => value.RowNumber < lastRow);
+    }
+
+    private void CopyNextTextNow(string sheetName)
     {
         try
         {
-            if (sheetName == _currentSheet)
-                SaveCurrentTextRows();
-
-            var values = _database.LoadTextRows(sheetName)
-                .Where(row => !string.IsNullOrWhiteSpace(row.Text))
-                .Select(row => (row.RowNumber, row.Text))
-                .ToList();
-
+            var values = LoadCopyableText(sheetName);
             if (values.Count == 0)
             {
                 ShowStatus($"{sheetName} has no text rows yet.");
                 return;
             }
 
-            var now = DateTime.UtcNow;
-            var nextIndex = 0;
-
-            if (_copyStates.TryGetValue(sheetName, out var previous))
-            {
-                var clickedWithinTwoSeconds = (now - previous.LastClickUtc).TotalSeconds <= 2;
-                nextIndex = clickedWithinTwoSeconds
-                    ? previous.Index
-                    : (previous.Index + 1) % values.Count;
-            }
-
-            nextIndex %= values.Count;
-            ClipboardService.WriteText(values[nextIndex].Text);
-            _copyStates[sheetName] = (nextIndex, now);
-
-            ShowStatus($"{sheetName} · Row {values[nextIndex].RowNumber} copied.");
+            var lastIndex = GetLastCopiedIndex(sheetName, values);
+            var nextIndex = lastIndex < 0 ? 0 : (lastIndex + 1) % values.Count;
+            CopyTextAt(sheetName, values[nextIndex], isPrevious: false);
         }
         catch (Exception ex)
         {
             ShowStatus($"Copy failed: {ex.Message}");
         }
+    }
+
+    private void CopyPreviousTextNow(string sheetName)
+    {
+        try
+        {
+            var values = LoadCopyableText(sheetName);
+            if (values.Count == 0)
+            {
+                ShowStatus($"{sheetName} has no text rows yet.");
+                return;
+            }
+
+            var lastIndex = GetLastCopiedIndex(sheetName, values);
+            var previousIndex = lastIndex < 0 ? 0 : (lastIndex - 1 + values.Count) % values.Count;
+            CopyTextAt(sheetName, values[previousIndex], isPrevious: true);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Previous row copy failed: {ex.Message}");
+        }
+    }
+
+    private void CopyTextAt(string sheetName, (int RowNumber, string Text) value, bool isPrevious)
+    {
+        ClipboardService.WriteText(value.Text);
+        _lastCopiedTextRows[sheetName] = value.RowNumber;
+        _database.SaveActionState($"Text:{sheetName}", value.RowNumber);
+        UpdateTextCopyButtonLabels();
+        _floatingWindow?.UpdateTextProgress(sheetName, value.RowNumber);
+
+        var direction = isPrevious ? "previous row" : "next row";
+        ShowStatus($"{sheetName} · Row {value.RowNumber} copied ({direction}).");
     }
 
     public void PasteClipboardIntoColumn(char column)
@@ -502,7 +668,7 @@ public partial class MainWindow : Window
             SaveMainSheet();
             MainGrid.Items.Refresh();
 
-            ShowStatus($"Pasted clipboard text into {column}{targetRow.RowNumber}.");
+            ShowStatus($"Pasted clipboard text into {column}{targetRow.RowNumber}. Last used row: {column}{targetRow.RowNumber}.");
         }
         catch (Exception ex)
         {
@@ -530,6 +696,83 @@ public partial class MainWindow : Window
             case 'D': row.D = value; break;
             case 'E': row.E = value; break;
         }
+    }
+
+
+    private void ExportTextCsv_Click(object sender, RoutedEventArgs e)
+    {
+        TextGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        TextGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        SaveCurrentTextRows();
+
+        var dialog = new SaveFileDialog
+        {
+            Title = $"Export {_currentSheet} as CSV",
+            Filter = "CSV file (*.csv)|*.csv",
+            DefaultExt = ".csv",
+            AddExtension = true,
+            OverwritePrompt = true,
+            FileName = $"{_currentSheet}.csv"
+        };
+
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        var lines = new List<string> { CsvLine("#", "TEXT") };
+        lines.AddRange(CurrentTextRows.Select(row =>
+            CsvLine(row.RowNumber.ToString(System.Globalization.CultureInfo.InvariantCulture), row.Text)));
+
+        WriteCsv(dialog.FileName, lines);
+        ShowStatus($"{_currentSheet} exported as UTF-8 CSV for Google Sheets.");
+    }
+
+    private void ExportMainCsv_Click(object sender, RoutedEventArgs e)
+    {
+        MainGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        MainGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        SaveMainSheet();
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Export A–E sheet as CSV",
+            Filter = "CSV file (*.csv)|*.csv",
+            DefaultExt = ".csv",
+            AddExtension = true,
+            OverwritePrompt = true,
+            FileName = "QuickDock-AE.csv"
+        };
+
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        var lines = new List<string> { CsvLine("ROW", "A", "B", "C", "D", "E") };
+        lines.AddRange(MainRows.Select(row => CsvLine(
+            row.RowNumber.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            row.A, row.B, row.C, row.D, row.E)));
+
+        WriteCsv(dialog.FileName, lines);
+        ShowStatus("A–E sheet exported as UTF-8 CSV for Google Sheets.");
+    }
+
+    private static string CsvLine(params string?[] fields) =>
+        string.Join(",", fields.Select(CsvEscape));
+
+    private static string CsvEscape(string? value)
+    {
+        value ??= string.Empty;
+        if (value.Contains('"') || value.Contains(',') ||
+            value.Contains('\r') || value.Contains('\n'))
+        {
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
+        }
+
+        return value;
+    }
+
+    private static void WriteCsv(string path, IEnumerable<string> lines)
+    {
+        var content = string.Join("\r\n", lines) + "\r\n";
+        File.WriteAllText(path, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
     }
 
     public void GenerateTotpFromClipboard()
@@ -572,6 +815,8 @@ public partial class MainWindow : Window
             }
 
             _floatingWindow.UpdateButtonVisibility(Settings);
+            UpdateTextCopyButtonLabels();
+            UpdateColumnActionButtonLabels();
             if (!_floatingWindow.IsVisible)
                 _floatingWindow.Show();
         }
@@ -590,6 +835,13 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        foreach (var pending in _pendingTextClicks.Values)
+        {
+            pending.Cancel();
+            pending.Dispose();
+        }
+        _pendingTextClicks.Clear();
+
         _floatingWindow?.Close();
         _floatingWindow = null;
         base.OnClosed(e);
