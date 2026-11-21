@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using QuickDock.Models;
@@ -9,11 +10,21 @@ public partial class FloatingWindow : Window
     private readonly MainWindow _owner;
     private bool _pointerPressed;
     private bool _dragging;
-    private Point _dragStart;
+    private Point _dragStartScreen;
     private double _dragWindowLeft;
     private double _dragWindowTop;
     private double _bubbleLeft;
     private double _bubbleTop;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetCursorPos(out NativePoint point);
 
     public FloatingWindow(MainWindow owner)
     {
@@ -44,6 +55,41 @@ public partial class FloatingWindow : Window
         EmptyState.Visibility = anyEnabled ? Visibility.Collapsed : Visibility.Visible;
     }
 
+    public void UpdateTextProgress(string sheetName, int rowNumber)
+    {
+        var sheetNumber = sheetName.Length > 3 ? sheetName[3..] : "1";
+        var title = $"TXT {sheetNumber}";
+        var content = rowNumber > 0
+            ? $"{title}{Environment.NewLine}#{rowNumber}"
+            : $"{title}{Environment.NewLine}—";
+
+        switch (sheetName)
+        {
+            case "TXT1": Txt1Button.Content = content; break;
+            case "TXT2": Txt2Button.Content = content; break;
+            case "TXT3": Txt3Button.Content = content; break;
+            case "TXT4": Txt4Button.Content = content; break;
+        }
+    }
+
+    public void UpdateColumnProgress(char column, int rowNumber)
+    {
+        var content = rowNumber > 0
+            ? $"{column}{Environment.NewLine}{column}{rowNumber}"
+            : $"{column}{Environment.NewLine}—";
+
+        switch (column)
+        {
+            case 'A': AButton.Content = content; break;
+            case 'B': BButton.Content = content; break;
+            case 'C': CButton.Content = content; break;
+            case 'D': DButton.Content = content; break;
+            case 'E': EButton.Content = content; break;
+        }
+    }
+
+    public void SetBubbleStatus(string text) => BubbleStatusText.Text = text;
+
     private void PositionBottomRight()
     {
         var workArea = SystemParameters.WorkArea;
@@ -61,8 +107,8 @@ public partial class FloatingWindow : Window
         _bubbleLeft = Left;
         _bubbleTop = Top;
 
-        Width = 350;
-        Height = 470;
+        Width = 370;
+        Height = 500;
 
         var workArea = SystemParameters.WorkArea;
         var maxLeft = Math.Max(workArea.Left + 8, workArea.Right - Width - 8);
@@ -78,8 +124,8 @@ public partial class FloatingWindow : Window
     private void CollapsePanel()
     {
         PanelRoot.Visibility = Visibility.Collapsed;
-        Width = 68;
-        Height = 68;
+        Width = 90;
+        Height = 90;
         Left = _bubbleLeft;
         Top = _bubbleTop;
         BubbleRoot.Visibility = Visibility.Visible;
@@ -87,12 +133,12 @@ public partial class FloatingWindow : Window
 
     private void Bubble_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ChangedButton != MouseButton.Left)
+        if (e.ChangedButton != MouseButton.Left || !GetCursorPos(out var cursor))
             return;
 
         _pointerPressed = true;
         _dragging = false;
-        _dragStart = e.GetPosition(null);
+        _dragStartScreen = new Point(cursor.X, cursor.Y);
         _dragWindowLeft = Left;
         _dragWindowTop = Top;
 
@@ -102,12 +148,12 @@ public partial class FloatingWindow : Window
 
     private void Bubble_MouseMove(object sender, MouseEventArgs e)
     {
-        if (!_pointerPressed || e.LeftButton != MouseButtonState.Pressed)
+        if (!_pointerPressed || e.LeftButton != MouseButtonState.Pressed ||
+            !GetCursorPos(out var cursor))
             return;
 
-        var current = e.GetPosition(null);
-        var deltaX = current.X - _dragStart.X;
-        var deltaY = current.Y - _dragStart.Y;
+        var deltaX = cursor.X - _dragStartScreen.X;
+        var deltaY = cursor.Y - _dragStartScreen.Y;
 
         if (!_dragging &&
             (Math.Abs(deltaX) >= SystemParameters.MinimumHorizontalDragDistance ||
@@ -123,11 +169,13 @@ public partial class FloatingWindow : Window
         var maxLeft = Math.Max(workArea.Left, workArea.Right - Width);
         var maxTop = Math.Max(workArea.Top, workArea.Bottom - Height);
 
-        Left = Math.Clamp(_dragWindowLeft + deltaX, workArea.Left, maxLeft);
-        Top = Math.Clamp(_dragWindowTop + deltaY, workArea.Top, maxTop);
+        var nextLeft = Math.Clamp(_dragWindowLeft + deltaX, workArea.Left, maxLeft);
+        var nextTop = Math.Clamp(_dragWindowTop + deltaY, workArea.Top, maxTop);
 
-        _bubbleLeft = Left;
-        _bubbleTop = Top;
+        Left = nextLeft;
+        Top = nextTop;
+        _bubbleLeft = nextLeft;
+        _bubbleTop = nextTop;
     }
 
     private void Bubble_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -142,6 +190,7 @@ public partial class FloatingWindow : Window
         if (!_dragging)
             ExpandPanel();
 
+        _dragging = false;
         e.Handled = true;
     }
 
