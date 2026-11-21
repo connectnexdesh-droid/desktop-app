@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using QuickDock.Models;
 
 namespace QuickDock;
@@ -152,8 +153,9 @@ public partial class FloatingWindow : Window
             !GetCursorPos(out var cursor))
             return;
 
-        var deltaX = cursor.X - _dragStartScreen.X;
-        var deltaY = cursor.Y - _dragStartScreen.Y;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var deltaX = (cursor.X - _dragStartScreen.X) / dpi.DpiScaleX;
+        var deltaY = (cursor.Y - _dragStartScreen.Y) / dpi.DpiScaleY;
 
         if (!_dragging &&
             (Math.Abs(deltaX) >= SystemParameters.MinimumHorizontalDragDistance ||
