@@ -202,6 +202,11 @@ public partial class FloatingWindow : Window
         {
             try { DragMove(); }
             catch (InvalidOperationException) { }
+            finally
+            {
+                _bubbleLeft = Left;
+                _bubbleTop = Top;
+            }
         }
     }
 
