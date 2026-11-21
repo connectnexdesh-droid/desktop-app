@@ -2,32 +2,34 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="QuickDock Floating Panel"
-        Width="62" Height="62"
+        Width="68" Height="68"
         WindowStyle="None" ResizeMode="NoResize"
         AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="False" Topmost="True"
         WindowStartupLocation="Manual">
     <Grid>
-        <Border x:Name="BubbleRoot" Width="62" Height="62"
-                CornerRadius="31" Background="#2456A6"
-                BorderBrush="#78A9FF" BorderThickness="1"
+        <Border x:Name="BubbleRoot" Width="68" Height="68"
+                CornerRadius="34" Background="#2456A6"
+                BorderBrush="#8DBBFF" BorderThickness="2"
                 HorizontalAlignment="Left" VerticalAlignment="Top"
                 MouseLeftButtonDown="Bubble_MouseLeftButtonDown"
+                MouseMove="Bubble_MouseMove"
+                MouseLeftButtonUp="Bubble_MouseLeftButtonUp"
                 Cursor="Hand">
             <Grid>
-                <TextBlock Text="QD" FontSize="20" FontWeight="Bold"
-                           Foreground="White" HorizontalAlignment="Center"
+                <TextBlock Text="QD" FontSize="21" FontWeight="Bold"
+                           Foreground="#FFFFFF" HorizontalAlignment="Center"
                            VerticalAlignment="Center"/>
-                <Ellipse Width="9" Height="9" Fill="#37C991"
+                <Ellipse Width="10" Height="10" Fill="#37C991"
                          Stroke="#10213A" StrokeThickness="2"
                          HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                         Margin="0,0,5,5"/>
+                         Margin="0,0,6,6"/>
             </Grid>
         </Border>
 
-        <Border x:Name="PanelRoot" Width="326" Height="438"
+        <Border x:Name="PanelRoot" Width="350" Height="470"
                 CornerRadius="16" Background="#0E192B"
-                BorderBrush="#385578" BorderThickness="1"
+                BorderBrush="#49688F" BorderThickness="1"
                 HorizontalAlignment="Left" VerticalAlignment="Top"
                 Visibility="Collapsed" Padding="14">
             <Grid>
@@ -48,48 +50,48 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel>
-                        <TextBlock Text="QuickDock" FontSize="19" FontWeight="Bold" Foreground="#F3F7FF"/>
-                        <TextBlock Text="FLOATING QUICK ACTIONS" FontSize="9" Foreground="#91A0B8" Margin="0,3,0,0"/>
+                        <TextBlock Text="QuickDock" FontSize="20" FontWeight="Bold" Foreground="#F4F7FC"/>
+                        <TextBlock Text="FLOATING QUICK ACTIONS" FontSize="9" Foreground="#A6B4C8" Margin="0,3,0,0"/>
                     </StackPanel>
-                    <Button Grid.Column="1" Content="—" Width="32" Height="30"
+                    <Button Grid.Column="1" Content="—" Width="34" Height="32"
                             Padding="0" Margin="0" Click="Collapse_Click"
                             Background="#263B5B" ToolTip="Collapse to bubble"/>
                 </Grid>
 
                 <TextBlock Grid.Row="1" Text="QUICK COPY" FontSize="10"
-                           FontWeight="Bold" Foreground="#78A9FF" Margin="2,0,0,6"/>
+                           FontWeight="Bold" Foreground="#8BB8FF" Margin="2,0,0,6"/>
                 <UniformGrid Grid.Row="2" Columns="4" Margin="0,0,0,12">
-                    <Button x:Name="Txt1Button" Content="TXT 1" Click="Txt1_Click" Background="#1D3556"/>
-                    <Button x:Name="Txt2Button" Content="TXT 2" Click="Txt2_Click" Background="#1D3556"/>
-                    <Button x:Name="Txt3Button" Content="TXT 3" Click="Txt3_Click" Background="#1D3556"/>
-                    <Button x:Name="Txt4Button" Content="TXT 4" Click="Txt4_Click" Background="#1D3556"/>
+                    <Button x:Name="Txt1Button" Content="TXT 1" Click="Txt1_Click" Background="#24466F" BorderBrush="#4D79AA"/>
+                    <Button x:Name="Txt2Button" Content="TXT 2" Click="Txt2_Click" Background="#24466F" BorderBrush="#4D79AA"/>
+                    <Button x:Name="Txt3Button" Content="TXT 3" Click="Txt3_Click" Background="#24466F" BorderBrush="#4D79AA"/>
+                    <Button x:Name="Txt4Button" Content="TXT 4" Click="Txt4_Click" Background="#24466F" BorderBrush="#4D79AA"/>
                 </UniformGrid>
 
                 <Button x:Name="TwoFaButton" Grid.Row="3" Content="◈   GENERATE 2FA CODE"
-                        Click="TwoFa_Click" Height="43" Margin="3,0,3,14"
-                        Background="#155C4A" BorderBrush="#23866B"/>
+                        Click="TwoFa_Click" Height="44" Margin="3,0,3,14"
+                        Background="#17664F" BorderBrush="#35A27F"/>
 
                 <StackPanel Grid.Row="4">
                     <TextBlock Text="QUICK PASTE · INTERNAL SHEET" FontSize="10"
-                               FontWeight="Bold" Foreground="#78A9FF" Margin="2,0,0,6"/>
+                               FontWeight="Bold" Foreground="#8BB8FF" Margin="2,0,0,6"/>
                     <UniformGrid Columns="5" Margin="0,0,0,10">
-                        <Button x:Name="AButton" Content="A" Click="A_Click" FontSize="17" Background="#263B5B"/>
-                        <Button x:Name="BButton" Content="B" Click="B_Click" FontSize="17" Background="#263B5B"/>
-                        <Button x:Name="CButton" Content="C" Click="C_Click" FontSize="17" Background="#263B5B"/>
-                        <Button x:Name="DButton" Content="D" Click="D_Click" FontSize="17" Background="#263B5B"/>
-                        <Button x:Name="EButton" Content="E" Click="E_Click" FontSize="17" Background="#263B5B"/>
+                        <Button x:Name="AButton" Content="A" Click="A_Click" FontSize="17" Background="#263B5B" BorderBrush="#49688F"/>
+                        <Button x:Name="BButton" Content="B" Click="B_Click" FontSize="17" Background="#263B5B" BorderBrush="#49688F"/>
+                        <Button x:Name="CButton" Content="C" Click="C_Click" FontSize="17" Background="#263B5B" BorderBrush="#49688F"/>
+                        <Button x:Name="DButton" Content="D" Click="D_Click" FontSize="17" Background="#263B5B" BorderBrush="#49688F"/>
+                        <Button x:Name="EButton" Content="E" Click="E_Click" FontSize="17" Background="#263B5B" BorderBrush="#49688F"/>
                     </UniformGrid>
-                    <Border Background="#17243A" CornerRadius="9" Padding="10">
+                    <Border Background="#17243A" BorderBrush="#314A69" BorderThickness="1" CornerRadius="9" Padding="11">
                         <TextBlock Text="A–E reads the Windows clipboard and fills the next empty cell in that column inside QuickDock."
-                                   Foreground="#A8B8CE" FontSize="11" TextWrapping="Wrap"/>
+                                   Foreground="#C1CEE0" FontSize="11" TextWrapping="Wrap"/>
                     </Border>
                     <TextBlock x:Name="EmptyState" Text="All action buttons are disabled. Enable buttons in Settings."
-                               Foreground="#91A0B8" FontSize="11" TextWrapping="Wrap"
+                               Foreground="#C1CEE0" FontSize="11" TextWrapping="Wrap"
                                Margin="4,12,4,0" Visibility="Collapsed"/>
                 </StackPanel>
 
-                <TextBlock Grid.Row="5" Text="Drag the top bar to move · Right-click bubble to move"
-                           Foreground="#72839C" FontSize="9" TextAlignment="Center" Margin="0,8,0,0"/>
+                <TextBlock Grid.Row="5" Text="Drag the bubble to move · Drag this title bar to move the panel"
+                           Foreground="#8799B2" FontSize="9" TextAlignment="Center" Margin="0,8,0,0"/>
             </Grid>
         </Border>
     </Grid>
