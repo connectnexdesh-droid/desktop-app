@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private readonly Stack<UndoSnapshot> _undoStack = new();
     private FloatingWindow? _floatingWindow;
     private string _currentSheet = "TXT1";
+    private string? _lastActiveTextSheet;
     private bool _ready;
 
     public AppSettings Settings { get; }
@@ -68,6 +69,10 @@ public partial class MainWindow : Window
             if (rowNumber > 0)
                 _lastCopiedTextRows[sheet] = rowNumber;
         }
+
+        var activeSheetNumber = _database.LoadActionState("LastTextSheet");
+        if (activeSheetNumber is >= 1 and <= 4)
+            _lastActiveTextSheet = $"TXT{activeSheetNumber}";
     }
 
     private void UpdateTextCopyButtonLabels()
@@ -85,11 +90,25 @@ public partial class MainWindow : Window
             var rowNumber = _lastCopiedTextRows.TryGetValue(sheet, out var row) ? row : 0;
             _floatingWindow.UpdateTextProgress(sheet, rowNumber);
         }
+
+        if (_lastActiveTextSheet is not null)
+        {
+            var row = _lastCopiedTextRows.TryGetValue(_lastActiveTextSheet, out var value) ? value : 0;
+            var sheetNumber = _lastActiveTextSheet[3..];
+            _floatingWindow.SetBubbleStatus(row > 0 ? $"T{sheetNumber} · #{row}" : $"T{sheetNumber} · —");
+        }
+        else
+        {
+            _floatingWindow.SetBubbleStatus("TXT: —");
+        }
     }
 
-    private static void SetTextCopyButton(Button button, string title, string sheetName)
+    private void SetTextCopyButton(Button button, string title, string sheetName)
     {
-        button.Content = title + Environment.NewLine;
+        var row = _lastCopiedTextRows.TryGetValue(sheetName, out var value) ? value : 0;
+        button.Content = row > 0
+            ? $"{title}{Environment.NewLine}#{row}"
+            : $"{title}{Environment.NewLine}—";
     }
 
     private void RefreshColumnProgress()
@@ -523,6 +542,7 @@ public partial class MainWindow : Window
             return;
 
         _database.SaveMainRows(MainRows);
+        RefreshColumnProgress();
     }
 
     public async void CopyNextText(string sheetName)
@@ -636,8 +656,10 @@ public partial class MainWindow : Window
         ClipboardService.WriteText(value.Text);
         _lastCopiedTextRows[sheetName] = value.RowNumber;
         _database.SaveActionState($"Text:{sheetName}", value.RowNumber);
+        _lastActiveTextSheet = sheetName;
+        _database.SaveActionState("LastTextSheet", int.Parse(sheetName[3..],
+            System.Globalization.CultureInfo.InvariantCulture));
         UpdateTextCopyButtonLabels();
-        _floatingWindow?.UpdateTextProgress(sheetName, value.RowNumber);
 
         var direction = isPrevious ? "previous row" : "next row";
         ShowStatus($"{sheetName} · Row {value.RowNumber} copied ({direction}).");
