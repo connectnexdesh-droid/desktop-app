@@ -476,13 +476,10 @@ public partial class MainWindow : Window
                 selected.Add(row);
         }
 
-        if (selected.Count == 0)
+        foreach (var cell in MainGrid.SelectedCells)
         {
-            foreach (var cell in MainGrid.SelectedCells)
-            {
-                if (cell.IsValid && cell.Item is SheetRow row && !selected.Contains(row))
-                    selected.Add(row);
-            }
+            if (cell.IsValid && cell.Item is SheetRow row && !selected.Contains(row))
+                selected.Add(row);
         }
 
         if (selected.Count == 0)
