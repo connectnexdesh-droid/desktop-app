@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using QuickDock.Models;
 using QuickDock.Services;
@@ -11,6 +12,7 @@ public partial class MainWindow : Window
 {
     private readonly DatabaseService _database = new();
     private readonly Dictionary<string, (int Index, DateTime LastClickUtc)> _copyStates = new();
+    private readonly Stack<UndoSnapshot> _undoStack = new();
     private FloatingWindow? _floatingWindow;
     private string _currentSheet = "TXT1";
     private bool _ready;
@@ -18,6 +20,11 @@ public partial class MainWindow : Window
     public AppSettings Settings { get; }
     public ObservableCollection<TextRow> CurrentTextRows { get; } = new();
     public ObservableCollection<SheetRow> MainRows { get; } = new();
+
+    private sealed record UndoSnapshot(
+        string SheetName,
+        List<TextRow>? TextRows = null,
+        List<SheetRow>? MainRows = null);
 
     public MainWindow()
     {
@@ -58,6 +65,7 @@ public partial class MainWindow : Window
         {
             for (var i = 1; i <= 40; i++)
                 MainRows.Add(new SheetRow { RowNumber = i });
+
             _database.SaveMainRows(MainRows);
             return;
         }
@@ -80,7 +88,10 @@ public partial class MainWindow : Window
         if (!_ready)
             return;
 
+        TextGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        TextGrid.CommitEdit(DataGridEditingUnit.Row, true);
         SaveCurrentTextRows();
+
         _currentSheet = GetSelectedSheetName();
         LoadTextSheet(_currentSheet);
     }
@@ -90,48 +101,182 @@ public partial class MainWindow : Window
         if (!_ready)
             return;
 
-        var rowNumber = 1;
-        foreach (var row in CurrentTextRows)
-        {
-            if (!string.IsNullOrWhiteSpace(row.Text))
-                row.RowNumber = rowNumber++;
-        }
+        for (var i = 0; i < CurrentTextRows.Count; i++)
+            CurrentTextRows[i].RowNumber = i + 1;
 
         _database.SaveTextRows(_currentSheet, CurrentTextRows);
+        TextGrid.Items.Refresh();
     }
 
     private void TextGrid_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
     {
-        Dispatcher.BeginInvoke(new Action(SaveCurrentTextRows), DispatcherPriority.Background);
+        var editedSheet = _currentSheet;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (editedSheet == _currentSheet)
+                SaveCurrentTextRows();
+        }), DispatcherPriority.Background);
     }
 
     private void AddTextRow_Click(object sender, RoutedEventArgs e)
     {
+        TextGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        TextGrid.CommitEdit(DataGridEditingUnit.Row, true);
+
         CurrentTextRows.Add(new TextRow { RowNumber = CurrentTextRows.Count + 1 });
+        SaveCurrentTextRows();
+
         TextGrid.SelectedItem = CurrentTextRows[^1];
         TextGrid.ScrollIntoView(TextGrid.SelectedItem);
         ShowStatus($"{_currentSheet}: new row added.");
     }
 
-    private void DeleteTextRow_Click(object sender, RoutedEventArgs e)
+    private void TextGrid_SelectAll_Click(object sender, RoutedEventArgs e)
     {
-        if (TextGrid.SelectedItem is not TextRow selected)
+        TextGrid.SelectAll();
+        TextGrid.Focus();
+    }
+
+    private void TextGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.A)
         {
-            ShowStatus("Select a row to delete.");
+            TextGrid.SelectAll();
+            e.Handled = true;
             return;
         }
 
-        CurrentTextRows.Remove(selected);
+        if (e.Key == Key.Delete && e.OriginalSource is not TextBox)
+        {
+            DeleteSelectedTextRows();
+            e.Handled = true;
+        }
+    }
+
+    private void DeleteTextRow_Click(object sender, RoutedEventArgs e) => DeleteSelectedTextRows();
+
+    private void DeleteSelectedTextRows()
+    {
+        TextGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        TextGrid.CommitEdit(DataGridEditingUnit.Row, true);
+
+        var selected = TextGrid.SelectedItems.OfType<TextRow>().ToList();
+        if (selected.Count == 0)
+        {
+            ShowStatus("Select one or more TXT rows first. Use Ctrl or Shift for multi-select.");
+            return;
+        }
+
+        var answer = MessageBox.Show(
+            $"Delete {selected.Count} selected row(s) from {_currentSheet}?",
+            "Confirm delete",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (answer != MessageBoxResult.Yes)
+            return;
+
+        PushTextUndoSnapshot(_currentSheet);
+
+        foreach (var row in selected)
+            CurrentTextRows.Remove(row);
+
         if (CurrentTextRows.Count == 0)
             CurrentTextRows.Add(new TextRow { RowNumber = 1 });
 
         SaveCurrentTextRows();
-        ShowStatus($"{_currentSheet}: selected row deleted.");
+        TextGrid.UnselectAll();
+        ShowStatus($"{selected.Count} row(s) deleted. Use Undo to restore.");
+    }
+
+    private void PushTextUndoSnapshot(string sheetName)
+    {
+        var rows = _database.LoadTextRows(sheetName)
+            .Select(row => new TextRow { RowNumber = row.RowNumber, Text = row.Text })
+            .ToList();
+
+        _undoStack.Push(new UndoSnapshot(sheetName, TextRows: rows));
+    }
+
+    private void PushMainUndoSnapshot()
+    {
+        var rows = MainRows
+            .Select(row => new SheetRow
+            {
+                RowNumber = row.RowNumber,
+                A = row.A,
+                B = row.B,
+                C = row.C,
+                D = row.D,
+                E = row.E
+            })
+            .ToList();
+
+        _undoStack.Push(new UndoSnapshot("MAIN", MainRows: rows));
+    }
+
+    private void Undo_Click(object sender, RoutedEventArgs e)
+    {
+        if (_undoStack.Count == 0)
+        {
+            ShowStatus("There is no delete or clear action to undo.");
+            return;
+        }
+
+        var snapshot = _undoStack.Pop();
+
+        if (snapshot.TextRows is not null)
+        {
+            _database.SaveTextRows(snapshot.SheetName, snapshot.TextRows);
+
+            if (_currentSheet == snapshot.SheetName)
+            {
+                LoadTextSheet(_currentSheet);
+                TextGrid.UnselectAll();
+            }
+
+            ShowStatus($"Undo completed for {snapshot.SheetName}.");
+            return;
+        }
+
+        if (snapshot.MainRows is not null)
+        {
+            MainRows.Clear();
+            foreach (var row in snapshot.MainRows)
+                MainRows.Add(row);
+
+            SaveMainSheet();
+            MainGrid.Items.Refresh();
+            MainGrid.UnselectAll();
+            ShowStatus("Undo completed for the A–E sheet.");
+        }
     }
 
     private void MainGrid_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
     {
         Dispatcher.BeginInvoke(new Action(SaveMainSheet), DispatcherPriority.Background);
+    }
+
+    private void MainGrid_SelectAll_Click(object sender, RoutedEventArgs e)
+    {
+        MainGrid.SelectAll();
+        MainGrid.Focus();
+    }
+
+    private void MainGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.A)
+        {
+            MainGrid.SelectAll();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Delete && e.OriginalSource is not TextBox)
+        {
+            ClearSelectedCells();
+            e.Handled = true;
+        }
     }
 
     private void AddMainRows_Click(object sender, RoutedEventArgs e)
@@ -146,8 +291,135 @@ public partial class MainWindow : Window
 
     private void SaveMainRows_Click(object sender, RoutedEventArgs e)
     {
+        MainGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        MainGrid.CommitEdit(DataGridEditingUnit.Row, true);
         SaveMainSheet();
         ShowStatus("A–E sheet saved.");
+    }
+
+    private void ClearSelectedCells_Click(object sender, RoutedEventArgs e) => ClearSelectedCells();
+
+    private void ClearSelectedCells()
+    {
+        MainGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        MainGrid.CommitEdit(DataGridEditingUnit.Row, true);
+
+        var targets = new List<(SheetRow Row, char Column)>();
+        var seen = new HashSet<(int RowNumber, char Column)>();
+
+        foreach (var cell in MainGrid.SelectedCells)
+        {
+            if (!cell.IsValid || cell.Item is not SheetRow row)
+                continue;
+
+            if (TryGetEditableColumn(cell.Column, out var column) &&
+                seen.Add((row.RowNumber, column)))
+            {
+                targets.Add((row, column));
+            }
+        }
+
+        if (targets.Count == 0 && MainGrid.SelectedItems.Count > 0)
+        {
+            foreach (var row in MainGrid.SelectedItems.OfType<SheetRow>())
+            {
+                foreach (var column in "ABCDE")
+                {
+                    if (seen.Add((row.RowNumber, column)))
+                        targets.Add((row, column));
+                }
+            }
+        }
+
+        if (targets.Count == 0)
+        {
+            ShowStatus("Select one or more A–E cells to clear.");
+            return;
+        }
+
+        PushMainUndoSnapshot();
+
+        foreach (var target in targets)
+            SetColumnValue(target.Row, target.Column, string.Empty);
+
+        SaveMainSheet();
+        MainGrid.Items.Refresh();
+        ShowStatus($"{targets.Count} cell(s) cleared. Use Undo to restore.");
+    }
+
+    private void DeleteMainRows_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = new List<SheetRow>();
+
+        foreach (var row in MainGrid.SelectedItems.OfType<SheetRow>())
+        {
+            if (!selected.Contains(row))
+                selected.Add(row);
+        }
+
+        if (selected.Count == 0)
+        {
+            foreach (var cell in MainGrid.SelectedCells)
+            {
+                if (cell.IsValid && cell.Item is SheetRow row && !selected.Contains(row))
+                    selected.Add(row);
+            }
+        }
+
+        if (selected.Count == 0)
+        {
+            ShowStatus("Select one or more A–E rows first.");
+            return;
+        }
+
+        var answer = MessageBox.Show(
+            $"Delete {selected.Count} selected row(s) from the A–E sheet?",
+            "Confirm delete",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (answer != MessageBoxResult.Yes)
+            return;
+
+        PushMainUndoSnapshot();
+
+        foreach (var row in selected)
+            MainRows.Remove(row);
+
+        if (MainRows.Count == 0)
+        {
+            for (var i = 1; i <= 20; i++)
+                MainRows.Add(new SheetRow { RowNumber = i });
+        }
+        else
+        {
+            RenumberMainRows();
+        }
+
+        SaveMainSheet();
+        MainGrid.Items.Refresh();
+        MainGrid.UnselectAll();
+        ShowStatus($"{selected.Count} row(s) deleted. Use Undo to restore.");
+    }
+
+    private void RenumberMainRows()
+    {
+        for (var i = 0; i < MainRows.Count; i++)
+            MainRows[i].RowNumber = i + 1;
+    }
+
+    private static bool TryGetEditableColumn(DataGridColumn column, out char result)
+    {
+        var header = column.Header?.ToString();
+        if (!string.IsNullOrEmpty(header) && header.Length == 1 &&
+            "ABCDE".Contains(header[0]))
+        {
+            result = header[0];
+            return true;
+        }
+
+        result = default;
+        return false;
     }
 
     private void SaveMainSheet()
@@ -166,8 +438,8 @@ public partial class MainWindow : Window
                 SaveCurrentTextRows();
 
             var values = _database.LoadTextRows(sheetName)
-                .Select(row => row.Text)
-                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Where(row => !string.IsNullOrWhiteSpace(row.Text))
+                .Select(row => (row.RowNumber, row.Text))
                 .ToList();
 
             if (values.Count == 0)
@@ -188,10 +460,10 @@ public partial class MainWindow : Window
             }
 
             nextIndex %= values.Count;
-            ClipboardService.WriteText(values[nextIndex]);
+            ClipboardService.WriteText(values[nextIndex].Text);
             _copyStates[sheetName] = (nextIndex, now);
 
-            ShowStatus($"{sheetName} · Row {nextIndex + 1} copied.");
+            ShowStatus($"{sheetName} · Row {values[nextIndex].RowNumber} copied.");
         }
         catch (Exception ex)
         {
