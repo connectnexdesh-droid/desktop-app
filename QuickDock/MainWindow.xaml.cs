@@ -561,7 +561,7 @@ public partial class MainWindow : Window
 
         try
         {
-            var doubleClickDelay = Math.Clamp(SystemParameters.DoubleClickTime, 250, 650);
+            var doubleClickDelay = Math.Clamp(SystemParameters.DoubleClickTime + 50, 300, 700);
             await Task.Delay(doubleClickDelay, cancellation.Token);
 
             if (_pendingTextClicks.TryGetValue(sheetName, out var active) &&
