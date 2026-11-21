@@ -10,6 +10,9 @@ using Microsoft.Win32;
 using WinForms = System.Windows.Forms;
 using Button = System.Windows.Controls.Button;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using TextBox = System.Windows.Controls.TextBox;
+using MessageBox = System.Windows.MessageBox;
+using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
 using QuickDock.Models;
 using QuickDock.Services;
 
