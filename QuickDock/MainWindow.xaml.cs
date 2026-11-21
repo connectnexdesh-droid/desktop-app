@@ -4,6 +4,8 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using System.Text;
+using System.IO;
+using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using QuickDock.Models;
 using QuickDock.Services;
@@ -21,6 +23,9 @@ public partial class MainWindow : Window
     private string _currentSheet = "TXT1";
     private string? _lastActiveTextSheet;
     private bool _ready;
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDoubleClickTime();
 
     public AppSettings Settings { get; }
     public ObservableCollection<TextRow> CurrentTextRows { get; } = new();
@@ -561,7 +566,7 @@ public partial class MainWindow : Window
 
         try
         {
-            var doubleClickDelay = Math.Clamp(SystemParameters.DoubleClickTime + 50, 300, 700);
+            var doubleClickDelay = Math.Clamp((int)GetDoubleClickTime() + 50, 300, 700);
             await Task.Delay(doubleClickDelay, cancellation.Token);
 
             if (_pendingTextClicks.TryGetValue(sheetName, out var active) &&
