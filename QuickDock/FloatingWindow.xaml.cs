@@ -46,11 +46,15 @@ public partial class FloatingWindow : Window
 
     private void ExpandPanel()
     {
+        var workArea = SystemParameters.WorkArea;
         BubbleRoot.Visibility = Visibility.Collapsed;
         PanelRoot.Visibility = Visibility.Visible;
         Width = 326;
         Height = 438;
-        PositionBottomRight();
+        Left = Math.Min(Left, workArea.Right - Width - 10);
+        Top = Math.Min(Top, workArea.Bottom - Height - 10);
+        Left = Math.Max(workArea.Left + 10, Left);
+        Top = Math.Max(workArea.Top + 10, Top);
     }
 
     private void CollapsePanel()
@@ -59,19 +63,21 @@ public partial class FloatingWindow : Window
         BubbleRoot.Visibility = Visibility.Visible;
         Width = 62;
         Height = 62;
-        PositionBottomRight();
     }
 
     private void Bubble_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        ExpandPanel();
-        e.Handled = true;
-    }
-
-    private void Bubble_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
-    {
+        var start = PointToScreen(e.GetPosition(this));
         try { DragMove(); }
         catch (InvalidOperationException) { }
+
+        var end = PointToScreen(Mouse.GetPosition(this));
+        var moved = Math.Abs(end.X - start.X) > SystemParameters.MinimumHorizontalDragDistance ||
+                    Math.Abs(end.Y - start.Y) > SystemParameters.MinimumVerticalDragDistance;
+
+        if (!moved)
+            ExpandPanel();
+
         e.Handled = true;
     }
 
