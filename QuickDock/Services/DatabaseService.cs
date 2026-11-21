@@ -106,9 +106,6 @@ public sealed class DatabaseService
         var position = 1;
         foreach (var row in rows)
         {
-            if (string.IsNullOrWhiteSpace(row.Text))
-                continue;
-
             using var insert = connection.CreateCommand();
             insert.Transaction = transaction;
             insert.CommandText = """
