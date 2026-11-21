@@ -159,6 +159,7 @@ public partial class MainWindow : Window
     {
         TextGrid.CommitEdit(DataGridEditingUnit.Cell, true);
         TextGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        SaveCurrentTextRows();
 
         var selected = TextGrid.SelectedItems.OfType<TextRow>().ToList();
         if (selected.Count == 0)
@@ -303,6 +304,7 @@ public partial class MainWindow : Window
     {
         MainGrid.CommitEdit(DataGridEditingUnit.Cell, true);
         MainGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        SaveMainSheet();
 
         var targets = new List<(SheetRow Row, char Column)>();
         var seen = new HashSet<(int RowNumber, char Column)>();
@@ -349,6 +351,10 @@ public partial class MainWindow : Window
 
     private void DeleteMainRows_Click(object sender, RoutedEventArgs e)
     {
+        MainGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        MainGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        SaveMainSheet();
+
         var selected = new List<SheetRow>();
 
         foreach (var row in MainGrid.SelectedItems.OfType<SheetRow>())
