@@ -6,7 +6,7 @@ QuickDock is a Windows desktop utility for sequential text copying, internal spr
 
 - Four independent text sheets: TXT 1, TXT 2, TXT 3 and TXT 4.
 - TXT buttons are available in both the main window and the floating panel. Each button displays the last copied row.
-- Single-click TXT action copies the next non-empty row. Double-click within the Windows double-click interval copies the previous non-empty row. The single-click action waits briefly so a double-click can be recognized without copying an unwanted row first.
+- Single-click TXT action copies the next non-empty row immediately. Double-click within the Windows double-click interval copies the previous non-empty row relative to the position before the first click.
 - The floating bubble displays the most recently used TXT sheet and row number.
 - One combined A–E sheet. Each A–E action button fills the next empty cell in its own column using the current Windows clipboard text.
 - A–E buttons remain separate and show the last occupied cell for each column (for example, A1, B4 or C2) in both the main window and floating panel.
