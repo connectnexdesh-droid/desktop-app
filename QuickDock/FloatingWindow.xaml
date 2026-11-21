@@ -13,7 +13,6 @@
                 BorderBrush="#78A9FF" BorderThickness="1"
                 HorizontalAlignment="Left" VerticalAlignment="Top"
                 MouseLeftButtonDown="Bubble_MouseLeftButtonDown"
-                MouseRightButtonDown="Bubble_MouseRightButtonDown"
                 Cursor="Hand">
             <Grid>
                 <TextBlock Text="QD" FontSize="20" FontWeight="Bold"
