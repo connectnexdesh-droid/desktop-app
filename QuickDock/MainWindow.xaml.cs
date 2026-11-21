@@ -7,6 +7,7 @@ using System.Text;
 using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
+using WinForms = System.Windows.Forms;
 using QuickDock.Models;
 using QuickDock.Services;
 
@@ -20,6 +21,8 @@ public partial class MainWindow : Window
     private readonly Dictionary<char, int> _lastColumnRows = new();
     private readonly Stack<UndoSnapshot> _undoStack = new();
     private FloatingWindow? _floatingWindow;
+    private WinForms.NotifyIcon? _trayIcon;
+    private WinForms.ContextMenuStrip? _trayMenu;
     private string _currentSheet = "TXT1";
     private string? _lastActiveTextSheet;
     private bool _ready;
@@ -39,6 +42,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        InitializeTrayIcon();
 
         _database.Initialize();
         Settings = _database.LoadSettings();
@@ -821,6 +825,79 @@ public partial class MainWindow : Window
         ApplyFloatingSettings();
     }
 
+
+    private void InitializeTrayIcon()
+    {
+        _trayMenu = new WinForms.ContextMenuStrip();
+
+        var openItem = new WinForms.ToolStripMenuItem("Open QuickDock");
+        openItem.Click += (_, _) => Dispatcher.BeginInvoke(new Action(RestoreFromTray));
+
+        var exitItem = new WinForms.ToolStripMenuItem("Exit QuickDock");
+        exitItem.Click += (_, _) => Dispatcher.BeginInvoke(new Action(() => Close()));
+
+        _trayMenu.Items.Add(openItem);
+        _trayMenu.Items.Add(new WinForms.ToolStripSeparator());
+        _trayMenu.Items.Add(exitItem);
+
+        _trayIcon = new WinForms.NotifyIcon
+        {
+            Icon = System.Drawing.SystemIcons.Application,
+            Text = "QuickDock is running",
+            ContextMenuStrip = _trayMenu,
+            Visible = true
+        };
+
+        _trayIcon.DoubleClick += (_, _) =>
+            Dispatcher.BeginInvoke(new Action(RestoreFromTray));
+    }
+
+    private void MainWindow_StateChanged(object? sender, EventArgs e)
+    {
+        if (WindowState != WindowState.Minimized)
+            return;
+
+        ShowInTaskbar = false;
+        Hide();
+
+        if (_floatingWindow is not null)
+        {
+            if (_floatingWindow.WindowState == WindowState.Minimized)
+                _floatingWindow.WindowState = WindowState.Normal;
+
+            if (!_floatingWindow.IsVisible)
+                _floatingWindow.Show();
+
+            _floatingWindow.Topmost = true;
+        }
+    }
+
+    private void RestoreFromTray()
+    {
+        ShowInTaskbar = true;
+        if (!IsVisible)
+            Show();
+
+        WindowState = WindowState.Normal;
+        Show();
+        Activate();
+
+        if (Settings.FloatingEnabled)
+        {
+            ApplyFloatingSettings();
+            if (_floatingWindow is not null)
+            {
+                if (_floatingWindow.WindowState == WindowState.Minimized)
+                    _floatingWindow.WindowState = WindowState.Normal;
+
+                if (!_floatingWindow.IsVisible)
+                    _floatingWindow.Show();
+
+                _floatingWindow.Topmost = true;
+            }
+        }
+    }
+
     private void ApplyFloatingSettings()
     {
         if (Settings.FloatingEnabled)
@@ -858,6 +935,16 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _doubleClickStates.Clear();
+
+        if (_trayIcon is not null)
+        {
+            _trayIcon.Visible = false;
+            _trayIcon.Dispose();
+            _trayIcon = null;
+        }
+
+        _trayMenu?.Dispose();
+        _trayMenu = null;
 
         _floatingWindow?.Close();
         _floatingWindow = null;
