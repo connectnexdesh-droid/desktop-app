@@ -119,7 +119,7 @@
                     </Grid.RowDefinitions>
                     <StackPanel Grid.Row="0">
                         <TextBlock Text="Combined internal paste sheet" FontSize="19" FontWeight="SemiBold"/>
-                        <TextBlock Text="Select multiple cells with Ctrl or drag. Select rows using the row headers. Each A–E button fills the next empty cell in its own column."
+                        <TextBlock Text="Select multiple cells with Ctrl or drag. Delete selected rows removes every row containing a selected cell. Each A–E button fills the next empty cell in its own column."
                                    Foreground="#A6B4C8" TextWrapping="Wrap" Margin="0,5,0,0"/>
                         <UniformGrid Columns="5" Margin="0,10,0,0">
                             <Button x:Name="MainAButton" Content="A" Click="MainA_Click" Height="48" Background="#263B5B"/>
@@ -131,7 +131,7 @@
                     </StackPanel>
                     <DataGrid x:Name="MainGrid" Grid.Row="1" ItemsSource="{Binding MainRows}"
                               AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
-                              SelectionMode="Extended" SelectionUnit="CellOrRowHeader" HeadersVisibility="All"
+                              SelectionMode="Extended" SelectionUnit="Cell" HeadersVisibility="Column"
                               PreviewKeyDown="MainGrid_PreviewKeyDown"
                               CellEditEnding="MainGrid_CellEditEnding">
                         <DataGrid.Columns>
