@@ -4,7 +4,8 @@
         Title="QuickDock" Height="780" Width="1160"
         MinHeight="650" MinWidth="940"
         WindowStartupLocation="CenterScreen"
-        Background="#0B1220" Foreground="#F0F4FB">
+        Background="#0B1220" Foreground="#F0F4FB"
+        StateChanged="MainWindow_StateChanged">
     <Grid Margin="22">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
