@@ -8,6 +8,8 @@ using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using WinForms = System.Windows.Forms;
+using Button = System.Windows.Controls.Button;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using QuickDock.Models;
 using QuickDock.Services;
 
