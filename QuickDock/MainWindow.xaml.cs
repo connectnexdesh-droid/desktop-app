@@ -48,7 +48,7 @@ public partial class MainWindow : Window
         LoadMainSheet();
         LoadProgressState();
         UpdateTextCopyButtonLabels();
-        RefreshColumnProgress();
+        UpdateColumnActionButtonLabels();
 
         _ready = true;
         ApplyFloatingSettings();
@@ -78,6 +78,24 @@ public partial class MainWindow : Window
         var activeSheetNumber = _database.LoadActionState("LastTextSheet");
         if (activeSheetNumber is >= 1 and <= 4)
             _lastActiveTextSheet = $"TXT{activeSheetNumber}";
+
+        foreach (var column in "ABCDE")
+        {
+            var savedRow = _database.LoadActionState($"Column:{column}");
+            var savedCellStillExists = savedRow > 0 && MainRows.Any(row =>
+                row.RowNumber == savedRow &&
+                !string.IsNullOrWhiteSpace(GetColumnValue(row, column)));
+
+            var rowNumber = savedCellStillExists
+                ? savedRow
+                : MainRows.Where(row => !string.IsNullOrWhiteSpace(GetColumnValue(row, column)))
+                    .Select(row => row.RowNumber)
+                    .DefaultIfEmpty(0)
+                    .Max();
+
+            _lastColumnRows[column] = rowNumber;
+            _database.SaveActionState($"Column:{column}", rowNumber);
+        }
     }
 
     private void UpdateTextCopyButtonLabels()
@@ -360,6 +378,7 @@ public partial class MainWindow : Window
                 MainRows.Add(row);
 
             SaveMainSheet();
+            RefreshColumnProgress();
             MainGrid.Items.Refresh();
             MainGrid.UnselectAll();
             ShowStatus("Undo completed for the A–E sheet.");
@@ -368,7 +387,11 @@ public partial class MainWindow : Window
 
     private void MainGrid_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
     {
-        Dispatcher.BeginInvoke(new Action(SaveMainSheet), DispatcherPriority.Background);
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            SaveMainSheet();
+            RefreshColumnProgress();
+        }), DispatcherPriority.Background);
     }
 
     private void MainGrid_SelectAll_Click(object sender, RoutedEventArgs e)
@@ -408,6 +431,7 @@ public partial class MainWindow : Window
         MainGrid.CommitEdit(DataGridEditingUnit.Cell, true);
         MainGrid.CommitEdit(DataGridEditingUnit.Row, true);
         SaveMainSheet();
+        RefreshColumnProgress();
         ShowStatus("A–E sheet saved.");
     }
 
@@ -458,6 +482,7 @@ public partial class MainWindow : Window
             SetColumnValue(target.Row, target.Column, string.Empty);
 
         SaveMainSheet();
+        RefreshColumnProgress();
         MainGrid.Items.Refresh();
         ShowStatus($"{targets.Count} cell(s) cleared. Use Undo to restore.");
     }
@@ -513,6 +538,7 @@ public partial class MainWindow : Window
         }
 
         SaveMainSheet();
+        RefreshColumnProgress();
         MainGrid.Items.Refresh();
         MainGrid.UnselectAll();
         ShowStatus($"{selected.Count} row(s) deleted. Use Undo to restore.");
@@ -544,7 +570,6 @@ public partial class MainWindow : Window
             return;
 
         _database.SaveMainRows(MainRows);
-        RefreshColumnProgress();
     }
 
     public async void CopyNextText(string sheetName)
@@ -689,7 +714,10 @@ public partial class MainWindow : Window
             }
 
             SetColumnValue(targetRow, column, clipboardText);
+            _lastColumnRows[column] = targetRow.RowNumber;
+            _database.SaveActionState($"Column:{column}", targetRow.RowNumber);
             SaveMainSheet();
+            UpdateColumnActionButtonLabels();
             MainGrid.Items.Refresh();
 
             ShowStatus($"Pasted clipboard text into {column}{targetRow.RowNumber}. Last used row: {column}{targetRow.RowNumber}.");
