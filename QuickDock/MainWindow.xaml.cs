@@ -16,7 +16,7 @@ public partial class MainWindow : Window
 {
     private readonly DatabaseService _database = new();
     private readonly Dictionary<string, int> _lastCopiedTextRows = new();
-    private readonly Dictionary<string, CancellationTokenSource> _pendingTextClicks = new();
+    private readonly Dictionary<string, (DateTime LastClickUtc, int PreviousRowNumber)> _doubleClickStates = new();
     private readonly Dictionary<char, int> _lastColumnRows = new();
     private readonly Stack<UndoSnapshot> _undoStack = new();
     private FloatingWindow? _floatingWindow;
@@ -572,36 +572,48 @@ public partial class MainWindow : Window
         _database.SaveMainRows(MainRows);
     }
 
-    public async void CopyNextText(string sheetName)
+    public void CopyNextText(string sheetName)
     {
-        if (_pendingTextClicks.TryGetValue(sheetName, out var pending))
-        {
-            _pendingTextClicks.Remove(sheetName);
-            pending.Cancel();
-            pending.Dispose();
-            CopyPreviousTextNow(sheetName);
-            return;
-        }
-
-        var cancellation = new CancellationTokenSource();
-        _pendingTextClicks[sheetName] = cancellation;
-
         try
         {
-            var doubleClickDelay = Math.Clamp((int)GetDoubleClickTime() + 50, 300, 700);
-            await Task.Delay(doubleClickDelay, cancellation.Token);
-
-            if (_pendingTextClicks.TryGetValue(sheetName, out var active) &&
-                ReferenceEquals(active, cancellation))
+            var values = LoadCopyableText(sheetName);
+            if (values.Count == 0)
             {
-                _pendingTextClicks.Remove(sheetName);
-                cancellation.Dispose();
-                CopyNextTextNow(sheetName);
+                ShowStatus($"{sheetName} has no text rows yet.");
+                return;
             }
+
+            var now = DateTime.UtcNow;
+            var doubleClickInterval = TimeSpan.FromMilliseconds(
+                Math.Clamp((int)GetDoubleClickTime() + 50, 300, 700));
+
+            if (_doubleClickStates.TryGetValue(sheetName, out var clickState) &&
+                now - clickState.LastClickUtc <= doubleClickInterval)
+            {
+                _doubleClickStates.Remove(sheetName);
+
+                var previousIndex = values.FindIndex(value =>
+                    value.RowNumber == clickState.PreviousRowNumber);
+
+                if (previousIndex < 0)
+                    previousIndex = 0;
+
+                CopyTextAt(sheetName, values[previousIndex], isPrevious: true);
+                return;
+            }
+
+            var currentIndex = GetLastCopiedIndex(sheetName, values);
+            var nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % values.Count;
+            var previousRowIndex = currentIndex < 0
+                ? 0
+                : (currentIndex - 1 + values.Count) % values.Count;
+
+            _doubleClickStates[sheetName] = (now, values[previousRowIndex].RowNumber);
+            CopyTextAt(sheetName, values[nextIndex], isPrevious: false);
         }
-        catch (OperationCanceledException)
+        catch (Exception ex)
         {
-            // The second click arrived within the Windows double-click interval.
+            ShowStatus($"Copy failed: {ex.Message}");
         }
     }
 
@@ -634,48 +646,6 @@ public partial class MainWindow : Window
             return index;
 
         return values.FindLastIndex(value => value.RowNumber < lastRow);
-    }
-
-    private void CopyNextTextNow(string sheetName)
-    {
-        try
-        {
-            var values = LoadCopyableText(sheetName);
-            if (values.Count == 0)
-            {
-                ShowStatus($"{sheetName} has no text rows yet.");
-                return;
-            }
-
-            var lastIndex = GetLastCopiedIndex(sheetName, values);
-            var nextIndex = lastIndex < 0 ? 0 : (lastIndex + 1) % values.Count;
-            CopyTextAt(sheetName, values[nextIndex], isPrevious: false);
-        }
-        catch (Exception ex)
-        {
-            ShowStatus($"Copy failed: {ex.Message}");
-        }
-    }
-
-    private void CopyPreviousTextNow(string sheetName)
-    {
-        try
-        {
-            var values = LoadCopyableText(sheetName);
-            if (values.Count == 0)
-            {
-                ShowStatus($"{sheetName} has no text rows yet.");
-                return;
-            }
-
-            var lastIndex = GetLastCopiedIndex(sheetName, values);
-            var previousIndex = lastIndex < 0 ? 0 : (lastIndex - 1 + values.Count) % values.Count;
-            CopyTextAt(sheetName, values[previousIndex], isPrevious: true);
-        }
-        catch (Exception ex)
-        {
-            ShowStatus($"Previous row copy failed: {ex.Message}");
-        }
     }
 
     private void CopyTextAt(string sheetName, (int RowNumber, string Text) value, bool isPrevious)
@@ -887,12 +857,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
-        foreach (var pending in _pendingTextClicks.Values)
-        {
-            pending.Cancel();
-            pending.Dispose();
-        }
-        _pendingTextClicks.Clear();
+        _doubleClickStates.Clear();
 
         _floatingWindow?.Close();
         _floatingWindow = null;
