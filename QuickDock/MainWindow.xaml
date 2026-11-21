@@ -39,6 +39,7 @@
                 <Grid Margin="18">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
@@ -74,9 +75,20 @@
                                    Foreground="#A6B4C8" VerticalAlignment="Center" Margin="16,0,0,0"/>
                     </DockPanel>
 
-                    <DataGrid x:Name="TextGrid" Grid.Row="1" ItemsSource="{Binding CurrentTextRows}"
+                    <UniformGrid Grid.Row="1" Columns="4" Margin="0,10,0,0">
+                        <Button x:Name="Txt1CopyButton" Content="TXT 1" Click="Txt1_Main_Click"
+                                Height="46" Background="#244D78" BorderBrush="#4A79AA"/>
+                        <Button x:Name="Txt2CopyButton" Content="TXT 2" Click="Txt2_Main_Click"
+                                Height="46" Background="#244D78" BorderBrush="#4A79AA"/>
+                        <Button x:Name="Txt3CopyButton" Content="TXT 3" Click="Txt3_Main_Click"
+                                Height="46" Background="#244D78" BorderBrush="#4A79AA"/>
+                        <Button x:Name="Txt4CopyButton" Content="TXT 4" Click="Txt4_Main_Click"
+                                Height="46" Background="#244D78" BorderBrush="#4A79AA"/>
+                    </UniformGrid>
+
+                    <DataGrid x:Name="TextGrid" Grid.Row="2" ItemsSource="{Binding CurrentTextRows}"
                               AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
-                              SelectionMode="Extended" SelectionUnit="FullRow" HeadersVisibility="All"
+                              SelectionMode="Extended" SelectionUnit="FullRow" HeadersVisibility="Column"
                               PreviewKeyDown="TextGrid_PreviewKeyDown"
                               CellEditEnding="TextGrid_CellEditEnding">
                         <DataGrid.Columns>
@@ -88,7 +100,8 @@
                         </DataGrid.Columns>
                     </DataGrid>
 
-                    <WrapPanel Grid.Row="2" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <WrapPanel Grid.Row="3" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button Content="Export TXT CSV" Click="ExportTextCsv_Click" Background="#235B52" BorderBrush="#3B907F"/>
                         <Button Content="+ Add row" Click="AddTextRow_Click" Background="#244D78" BorderBrush="#4A79AA"/>
                         <Button Content="Select all" Click="TextGrid_SelectAll_Click" Background="#263B5B"/>
                         <Button Content="Delete selected" Click="DeleteTextRow_Click" Background="#713A49" BorderBrush="#A85B6C"/>
@@ -106,8 +119,15 @@
                     </Grid.RowDefinitions>
                     <StackPanel Grid.Row="0">
                         <TextBlock Text="Combined internal paste sheet" FontSize="19" FontWeight="SemiBold"/>
-                        <TextBlock Text="Select multiple cells with Ctrl or drag. Select rows using the row headers. A–E buttons fill the next empty cell in their own column."
+                        <TextBlock Text="Select multiple cells with Ctrl or drag. Select rows using the row headers. Each A–E button fills the next empty cell in its own column."
                                    Foreground="#A6B4C8" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                        <UniformGrid Columns="5" Margin="0,10,0,0">
+                            <Button x:Name="MainAButton" Content="A" Click="MainA_Click" Height="48" Background="#263B5B"/>
+                            <Button x:Name="MainBButton" Content="B" Click="MainB_Click" Height="48" Background="#263B5B"/>
+                            <Button x:Name="MainCButton" Content="C" Click="MainC_Click" Height="48" Background="#263B5B"/>
+                            <Button x:Name="MainDButton" Content="D" Click="MainD_Click" Height="48" Background="#263B5B"/>
+                            <Button x:Name="MainEButton" Content="E" Click="MainE_Click" Height="48" Background="#263B5B"/>
+                        </UniformGrid>
                     </StackPanel>
                     <DataGrid x:Name="MainGrid" Grid.Row="1" ItemsSource="{Binding MainRows}"
                               AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
@@ -135,6 +155,7 @@
                         <Button Content="Clear selected cells" Click="ClearSelectedCells_Click" Background="#755A2B" BorderBrush="#A98A4B"/>
                         <Button Content="Delete selected rows" Click="DeleteMainRows_Click" Background="#713A49" BorderBrush="#A85B6C"/>
                         <Button Content="Undo" Click="Undo_Click" Background="#34445D"/>
+                        <Button Content="Export A–E CSV" Click="ExportMainCsv_Click" Background="#235B52" BorderBrush="#3B907F"/>
                         <Button Content="Save sheet" Click="SaveMainRows_Click" Background="#1E674F" BorderBrush="#329B77"/>
                     </WrapPanel>
                 </Grid>
@@ -182,7 +203,7 @@
                         <Border Background="#111C2E" CornerRadius="10" Padding="14" BorderBrush="#31445F" BorderThickness="1">
                             <StackPanel>
                                 <TextBlock Text="How the buttons work" FontWeight="SemiBold"/>
-                                <TextBlock Text="TXT: first click copies the current row. Click again within 2 seconds to copy the same row; after 2 seconds, the next click advances to the next non-empty row."
+                                <TextBlock Text="TXT: a single click copies the next non-empty row. Double-click within the Windows double-click interval to copy the previous non-empty row."
                                            Foreground="#A6B4C8" TextWrapping="Wrap" Margin="0,6,0,0"/>
                                 <TextBlock Text="A–E: copies the current Windows clipboard text into the next empty cell of the selected column in this app's internal sheet."
                                            Foreground="#A6B4C8" TextWrapping="Wrap" Margin="0,6,0,0"/>
